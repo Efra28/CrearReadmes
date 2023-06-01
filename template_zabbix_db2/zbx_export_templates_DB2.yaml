@@ -1,0 +1,951 @@
+zabbix_export:
+  version: '6.4'
+  template_groups:
+    -
+      uuid: e5b65d6c41bf4240aa5286544e59e20b
+      name: 'TemplateGroup Base Innovation'
+  templates:
+    -
+      uuid: 881d52b9dbf64b71bb74d7d1eff1d16f
+      template: 'Template Base Innovation - DB2'
+      name: 'Template Base Innovation - DB2'
+      description: |
+        IBM DB2 Template
+        Version: 1.0.0
+        Author: Rosimar Lima (rosimarl@kyndryl.com)
+        Contibutors:
+          - Vinícius Freitas
+          - Jose Henrique
+          - Alexei Miranda 
+          - David Fachini
+          - Junior Silva
+          - Vih Murmann
+        
+        Strong points:
+          - No need scripts or modules of applications on monitored DB2 instances
+        
+        Weaknesses
+          - Too many accesses to the database to get the data
+      groups:
+        -
+          name: 'TemplateGroup Base Innovation'
+      items:
+        -
+          uuid: de453c278ea84b15bf68a50018d60ae4
+          name: 'IBM DB2 Get DiagPath'
+          key: 'system.run["echo ''HOST,INSTNAME,DIAGPATH''; for instname in `ps -ef | grep ''Vendor Process'' | grep -v grep | awk ''{print $1}'' | grep -i -v ''new mail''`; do for diagpath in `su - ${instname} -c ''db2 get dbm cfg'' 2>/dev/null | grep ''Current member resolved DIAGPATH'' | awk ''{print $6}'' `; do echo \"`hostname`,${instname},${diagpath}\"; done; done;"]'
+          delay: 10m
+          trends: '0'
+          value_type: TEXT
+          preprocessing:
+            -
+              type: CSV_TO_JSON
+              parameters:
+                - ''
+                - ','
+                - '1'
+              error_handler: DISCARD_VALUE
+        -
+          uuid: 811373a9c1654a6eb81f39f23d1758bb
+          name: 'IBM DB2 Get Instances'
+          key: 'system.run[" echo ''HOST,PATH,INSTNAME'' ; for instowner in `ps -ef | grep ''Vendor Process'' | grep -v grep | awk ''{print $1}'' | grep -i -v ''new mail''`; do for pathinst in `su - ${instowner} -c ''db2level'' 2>/dev/null | grep ''Product is installed at'' | awk ''{print $5}'' | sed ''s/\"\.//g'' | sed ''s/\"//g'' | grep -i -v ''new mail''`; do echo \"`hostname`,${pathinst},${instowner}\"; done; done ;"]'
+          delay: 10m
+          trends: '0'
+          value_type: TEXT
+          preprocessing:
+            -
+              type: CSV_TO_JSON
+              parameters:
+                - ''
+                - ','
+                - '1'
+              error_handler: DISCARD_VALUE
+        -
+          uuid: ca7c9eeda4574428a1ac69904025eece
+          name: 'IBM DB2 Get Databases'
+          key: 'system.run["echo ''HOST,PATH,INSTNAME,DBNAME''; for instowner in `ps -ef | grep ''Vendor Process'' | grep -v grep | awk ''{print $1}'' | grep -i -v ''new mail''`; do for pathinst in `su - ${instowner} -c ''db2level'' 2>/dev/null | grep ''Product is installed at'' | awk ''{print $5}'' | sed ''s/\"\.//g'' | sed ''s/\"//g'' | grep -i -v ''new mail''`; do for dbname in `su - ${instowner} -c ''db2 list database directory'' 2>/dev/null | grep -E ''Database name|entry type'' | awk -F''='' ''{print $2}'' | sed ''N;s/\n//'' | grep -v Remote | sed ''s/^\ //g'' | awk ''{print $1}'' | sort | uniq `; do echo \"`hostname`,${pathinst},${instowner},${dbname}\"; done; done; done;"]'
+          delay: 10m
+          trends: '0'
+          value_type: TEXT
+          preprocessing:
+            -
+              type: CSV_TO_JSON
+              parameters:
+                - ''
+                - ','
+                - '1'
+              error_handler: DISCARD_VALUE
+        -
+          uuid: 98bdbe4be6db4a8bb7916272d1dab827
+          name: 'IBM DB2 Get Tablespaces'
+          key: 'system.run["echo ''HOST,PATH,INSTNAME,DBNAME,TBSNAME''; for instowner in `ps -ef | grep ''Vendor Process'' | grep -i -v ''new mail'' | grep -v grep | awk ''{print $1}''`; do for pathinst in `su - ${instowner} -c ''db2level'' 2>/dev/null | grep -i -v ''new mail'' | grep ''Product is installed at'' | awk ''{print $5}'' | sed ''s/\"\.//g'' | sed ''s/\"//g''`; do for dbname in `su - ${instowner} -c ''db2 list database directory'' 2>/dev/null | grep -i -v ''new mail'' | grep -E ''Database name|entry type'' | awk -F''='' ''{print $2}'' | sed ''N;s/\n//'' | grep -v Remote | sed ''s/^\ //g'' | awk ''{print $1}'' | sort | uniq `; do for tbsname in `su - ${instowner} -c \"db2 connect to ${dbname} >/dev/null ; db2 -x ''SELECT TBSP_NAME FROM SYSIBMADM.TBSP_UTILIZATION'' ; db2 connect reset >/dev/null\" 2>/dev/null | grep -i -v ''new mail'' `; do echo \"`hostname`,${pathinst},${instowner},${dbname},${tbsname}\"; done; done; done; done"]'
+          delay: 10m
+          trends: '0'
+          value_type: TEXT
+          preprocessing:
+            -
+              type: CSV_TO_JSON
+              parameters:
+                - ''
+                - ','
+                - '1'
+              error_handler: DISCARD_VALUE
+      discovery_rules:
+        -
+          uuid: 900f4bc0e6804329a5bc1729ed69c293
+          name: 'IBM DB2 Database Discovery Rule'
+          type: DEPENDENT
+          key: db2.database.discovery
+          delay: '0'
+          lifetime: 0d
+          item_prototypes:
+            -
+              uuid: 0041062367bc49008e28e6fa65eb594f
+              name: 'IBM DB2 {#INSTNAME} {#DBNAME} Transaction Log Primary Size (MB)'
+              type: CALCULATED
+              key: 'db2.transaction.log.primary.size[{#HOST}.{#INSTNAME}.{#DBNAME}]'
+              delay: 2m
+              value_type: FLOAT
+              params: 'last(//system.run["su - {#INSTNAME} -c \"db2 get db cfg for {#DBNAME}\" 2>/dev/null | grep ''Number of primary'' | awk ''{print $8}''"])*(4096*last(//system.run["su - {#INSTNAME} -c \"db2 get db cfg for {#DBNAME}\" 2>/dev/null | grep ''LOGFILSIZ'' | awk ''{print $7}''"])/1024/1024)'
+              tags:
+                -
+                  tag: SubComponent
+                  value: Log
+            -
+              uuid: 9ae1c4b7055048399e502f4bfc945f96
+              name: 'IBM DB2 {#INSTNAME} {#DBNAME} Transaction Log Primary Used (%)'
+              type: CALCULATED
+              key: 'db2.transaction.log.primary.used.perc[{#HOST}.{#INSTNAME}.{#DBNAME}]'
+              delay: 2m
+              value_type: FLOAT
+              units: '%'
+              params: 'last(//system.run["su - {#INSTNAME} -c \"db2 connect to {#DBNAME} >/dev/null; db2 -x ''select total_log_used /1024 /1024 total_log_mb from table(mon_get_transaction_log(-2))'' ; db2 connect reset >/dev/null \" 2>/dev/null | tail -n1 | sed ''s/\ //g''"])/last(//db2.transaction.log.primary.size[{#HOST}.{#INSTNAME}.{#DBNAME}])*100'
+              tags:
+                -
+                  tag: SubComponent
+                  value: Log
+              trigger_prototypes:
+                -
+                  uuid: 55561a05f923408793045ee34945d7f7
+                  expression: |
+                    min(/Template Base Innovation - DB2/db2.transaction.log.primary.used.perc[{#HOST}.{#INSTNAME}.{#DBNAME}],10m)>=80 and
+                    min(/Template Base Innovation - DB2/db2.transaction.log.primary.used.perc[{#HOST}.{#INSTNAME}.{#DBNAME}],10m)<90
+                  recovery_mode: RECOVERY_EXPRESSION
+                  recovery_expression: 'min(/Template Base Innovation - DB2/db2.transaction.log.primary.used.perc[{#HOST}.{#INSTNAME}.{#DBNAME}],30m)<80'
+                  name: '{$CUSTOMER.CODE}_prilogs_gudc_db2_v1 - {HOST.NAME} - Percentage of primary logs used is too high {ITEM.LASTVALUE}'
+                  priority: HIGH
+                  tags:
+                    -
+                      tag: Expire
+                      value: 'True'
+                    -
+                      tag: InstanceID
+                      value: '{#INSTNAME}'
+                    -
+                      tag: SubComponent
+                      value: Log
+                -
+                  uuid: 7d21a26554064964a47ecc4d6ad03992
+                  expression: 'min(/Template Base Innovation - DB2/db2.transaction.log.primary.used.perc[{#HOST}.{#INSTNAME}.{#DBNAME}],10m)>=90'
+                  recovery_mode: RECOVERY_EXPRESSION
+                  recovery_expression: 'min(/Template Base Innovation - DB2/db2.transaction.log.primary.used.perc[{#HOST}.{#INSTNAME}.{#DBNAME}],30m)<80'
+                  name: '{$CUSTOMER.CODE}_prilogs_gudf_db2_v1 - {HOST.NAME} - Percentage of primary logs used is too high {ITEM.LASTVALUE}'
+                  priority: DISASTER
+                  tags:
+                    -
+                      tag: Expire
+                      value: 'True'
+                    -
+                      tag: InstanceID
+                      value: '{#INSTNAME}'
+                    -
+                      tag: SubComponent
+                      value: Log
+            -
+              uuid: 7f0fb0e0790043ca91644a6e8228756a
+              name: 'IBM DB2 {#INSTNAME} {#DBNAME} Transaction Log Secondary Size (MB)'
+              type: CALCULATED
+              key: 'db2.transaction.log.secondary.size[{#HOST}.{#INSTNAME}.{#DBNAME}]'
+              delay: 2m
+              value_type: FLOAT
+              params: 'last(//system.run["su - {#INSTNAME} -c \"db2 get db cfg for {#DBNAME}\" 2>/dev/null | grep ''Number of secondary'' | awk ''{print $8}''"])*(4096*last(//system.run["su - {#INSTNAME} -c \"db2 get db cfg for {#DBNAME}\" 2>/dev/null | grep ''LOGFILSIZ'' | awk ''{print $7}''"])/1024/1024)'
+              tags:
+                -
+                  tag: SubComponent
+                  value: Log
+            -
+              uuid: de0d1d3c5d1d4e978565413ecc4c6c7c
+              name: 'IBM DB2 {#INSTNAME} {#DBNAME} Transaction Log Secondary Used (%)'
+              type: CALCULATED
+              key: 'db2.transaction.log.secondary.used.perc[{#HOST}.{#INSTNAME}.{#DBNAME}]'
+              delay: 2m
+              value_type: FLOAT
+              units: '%'
+              params: '(last(//system.run["su - {#INSTNAME} -c \"db2 connect to {#DBNAME} >/dev/null; db2 -x ''select total_log_used /1024 /1024 total_log_mb from table(mon_get_transaction_log(-2))'' ; db2 connect reset >/dev/null \" 2>/dev/null | tail -n1 | sed ''s/\ //g''"]) - last(//db2.transaction.log.primary.size[{#HOST}.{#INSTNAME}.{#DBNAME}])) / last(//db2.transaction.log.secondary.size[{#HOST}.{#INSTNAME}.{#DBNAME}])*100'
+              preprocessing:
+                -
+                  type: IN_RANGE
+                  parameters:
+                    - '0'
+                    - '999999999999'
+                  error_handler: CUSTOM_VALUE
+                  error_handler_params: '0'
+              tags:
+                -
+                  tag: SubComponent
+                  value: Log
+              trigger_prototypes:
+                -
+                  uuid: 4f5f5da3639945dc82da014603f37b18
+                  expression: |
+                    min(/Template Base Innovation - DB2/db2.transaction.log.secondary.used.perc[{#HOST}.{#INSTNAME}.{#DBNAME}],10m)>=1 and
+                    min(/Template Base Innovation - DB2/db2.transaction.log.secondary.used.perc[{#HOST}.{#INSTNAME}.{#DBNAME}],10m)<10
+                  recovery_mode: RECOVERY_EXPRESSION
+                  recovery_expression: 'min(/Template Base Innovation - DB2/db2.transaction.log.secondary.used.perc[{#HOST}.{#INSTNAME}.{#DBNAME}],30m)=0'
+                  name: '{$CUSTOMER.CODE}_seclogs_gudc_db2_v1 - {HOST.NAME} - Percentage of secondary logs used is too high {ITEM.LASTVALUE}'
+                  priority: HIGH
+                  tags:
+                    -
+                      tag: Expire
+                      value: 'True'
+                    -
+                      tag: InstanceID
+                      value: '{#INSTNAME}'
+                    -
+                      tag: SubComponent
+                      value: Log
+                -
+                  uuid: 37eae2923f334e28abb5e4417f873604
+                  expression: 'min(/Template Base Innovation - DB2/db2.transaction.log.secondary.used.perc[{#HOST}.{#INSTNAME}.{#DBNAME}],10m)>=10'
+                  recovery_mode: RECOVERY_EXPRESSION
+                  recovery_expression: 'min(/Template Base Innovation - DB2/db2.transaction.log.secondary.used.perc[{#HOST}.{#INSTNAME}.{#DBNAME}],30m)=0'
+                  name: '{$CUSTOMER.CODE}_seclogs_gudf_db2_v1 - {HOST.NAME} - Percentage of secondary logs used is too high {ITEM.LASTVALUE}'
+                  priority: DISASTER
+                  tags:
+                    -
+                      tag: Expire
+                      value: 'True'
+                    -
+                      tag: InstanceID
+                      value: '{#INSTNAME}'
+                    -
+                      tag: SubComponent
+                      value: Log
+            -
+              uuid: 4754f224ab46415f94259a030c9670a0
+              name: 'IBM DB2 {#INSTNAME} {#DBNAME} Disk Capacity (MB)'
+              key: 'system.run["su - {#INSTNAME} -c \"db2 connect to {#DBNAME} >/dev/null; db2 ''call GET_DBSIZE_INFO(?, ?, ?, -1)'' ; db2 connect reset >/dev/null\" 2>/dev/null | grep Parameter | sed ''N;s/\n//'' | grep DATABASECAPACITY | awk ''{print $8 /1024 /1024}''"]'
+              delay: 5m
+              value_type: FLOAT
+              tags:
+                -
+                  tag: SubComponent
+                  value: FileSystem
+            -
+              uuid: 2bfac2e49c4f4e01b526f654ffd07f38
+              name: 'IBM DB2 {#INSTNAME} {#DBNAME} Disk Database Size (MB)'
+              key: 'system.run["su - {#INSTNAME} -c \"db2 connect to {#DBNAME} >/dev/null; db2 ''call GET_DBSIZE_INFO(?, ?, ?, -1)'' ; db2 connect reset >/dev/null\" 2>/dev/null | grep Parameter | sed ''N;s/\n//'' | grep DATABASESIZE | awk ''{print $8 /1024 /1024}''"]'
+              delay: 5m
+              value_type: FLOAT
+              tags:
+                -
+                  tag: SubComponent
+                  value: FileSystem
+            -
+              uuid: 7e07ba329cc54a95b59965994cc19c48
+              name: 'IBM DB2 {#INSTNAME} {#DBNAME} Disk Capacity Available (%)'
+              key: 'system.run["su - {#INSTNAME} -c \"db2 connect to {#DBNAME} >/dev/null; db2 ''call GET_DBSIZE_INFO(?, ?, ?, -1)'' ; db2 connect reset >/dev/null\" 2>/dev/null | grep Parameter | sed ''N;s/\n//'' | grep DATABASE | awk ''{print $8 \" \"}'' | sed ''N;s/\n//'' | awk ''{print $1/$2*100}''"]'
+              delay: 5m
+              value_type: FLOAT
+              units: '%'
+              tags:
+                -
+                  tag: SubComponent
+                  value: FileSystem
+            -
+              uuid: 765446e7b3464da99bb96cf02e59a6ec
+              name: 'IBM DB2 {#INSTNAME} {#DBNAME} Disk Capacity Used (%)'
+              key: 'system.run["su - {#INSTNAME} -c \"db2 connect to {#DBNAME} >/dev/null; db2 ''call GET_DBSIZE_INFO(?, ?, ?, -1)'' ; db2 connect reset >/dev/null\" 2>/dev/null | grep Parameter | sed ''N;s/\n//'' | grep DATABASE | awk ''{print $8 \" \"}'' | sed ''N;s/\n//'' | awk ''{print 100-($1/$2*100)}''"]'
+              delay: 5m
+              value_type: FLOAT
+              units: '%'
+              tags:
+                -
+                  tag: SubComponent
+                  value: FileSystem
+            -
+              uuid: 644fd81e5b224c6d9073d1cba8a7862f
+              name: 'IBM DB2 {#INSTNAME} {#DBNAME} Applications Currently Connected'
+              key: 'system.run["su - {#INSTNAME} -c \"db2 connect to {#DBNAME} >/dev/null; db2 -x ''Select APPLS_CUR_CONS from TABLE(MON_GET_DATABASE(-2))''; db2 connect reset >/dev/null\" 2>/dev/null | tail -n1 | sed ''s/\ //g'' "]'
+              delay: 5m
+              value_type: FLOAT
+              tags:
+                -
+                  tag: SubComponent
+                  value: Performance
+            -
+              uuid: c42b662f87524dac85b9582178667121
+              name: 'IBM DB2 {#INSTNAME} {#DBNAME} Applications Currently Executing'
+              key: 'system.run["su - {#INSTNAME} -c \"db2 connect to {#DBNAME} >/dev/null; db2 -x ''Select APPLS_IN_DB2 from TABLE(MON_GET_DATABASE(-2))''; db2 connect reset >/dev/null\" 2>/dev/null | tail -n1 | sed ''s/\ //g''"]'
+              delay: 5m
+              value_type: FLOAT
+              tags:
+                -
+                  tag: SubComponent
+                  value: Performance
+            -
+              uuid: e3a3e5e9ad4e445fab95242f9a022f86
+              name: 'IBM DB2 {#INSTNAME} {#DBNAME} Bufferpool Data Hit Ratio Overall'
+              key: 'system.run["su - {#INSTNAME} -c \"db2 connect to {#DBNAME} >/dev/null; db2 -x ''select case POOL_DATA_L_READS when 0 then 1 else (POOL_DATA_L_READS * 1. - POOL_DATA_P_READS * 1.) / POOL_DATA_L_READS end *100. from sysibmadm.snapdb'' ; db2 connect reset >/dev/null \" 2>/dev/null | tail -n1 | sed ''s/\ //g''"]'
+              delay: 5m
+              value_type: FLOAT
+              tags:
+                -
+                  tag: SubComponent
+                  value: Performance
+            -
+              uuid: f59bd05d96bf44a9be3da5e8dc5a904c
+              name: 'IBM DB2 {#INSTNAME} {#DBNAME} Commit Statements Attempted'
+              key: 'system.run["su - {#INSTNAME} -c \"db2 connect to {#DBNAME} >/dev/null; db2 -x ''Select COMMIT_SQL_STMTS from sysibmadm.snapdb''; db2 connect reset >/dev/null\" 2>/dev/null | tail -n1 | sed ''s/\ //g''"]'
+              delay: 5m
+              value_type: FLOAT
+              tags:
+                -
+                  tag: SubComponent
+                  value: Performance
+            -
+              uuid: d21301e4e8e3425dbb2748b7cc9593ad
+              name: 'IBM DB2 {#INSTNAME} {#DBNAME} Memory Current (MB)'
+              key: 'system.run["su - {#INSTNAME} -c \"db2 connect to {#DBNAME} >/dev/null; db2 -x ''select CURRENT_MEMBER_MEM/1024/1024 FROM TABLE(SYSPROC.ADMIN_GET_MEM_USAGE()) '' ; db2 connect reset >/dev/null\" 2>/dev/null | tail -n1 | sed ''s/\ //g''"]'
+              delay: 5m
+              value_type: FLOAT
+              tags:
+                -
+                  tag: SubComponent
+                  value: Memory
+            -
+              uuid: afed7062469a4e87a62243d6b10a3413
+              name: 'IBM DB2 {#INSTNAME} {#DBNAME} Backup Last Days'
+              key: 'system.run["su - {#INSTNAME} -c \"db2 connect to {#DBNAME} >/dev/null; db2 -x ''select days(current date) - days(LAST_BACKUP) from TABLE(MON_GET_DATABASE(-2))'' ; db2 connect reset >/dev/null \" 2>/dev/null | tail -n1 | sed ''s/\ //g''"]'
+              delay: 5m
+              value_type: FLOAT
+              tags:
+                -
+                  tag: SubComponent
+                  value: Backup
+              trigger_prototypes:
+                -
+                  uuid: c46f2e696da14a50a895bfd27e8a8f4b
+                  expression: 'last(/Template Base Innovation - DB2/system.run["su - {#INSTNAME} -c \"db2 connect to {#DBNAME} >/dev/null; db2 -x ''select days(current date) - days(LAST_BACKUP) from TABLE(MON_GET_DATABASE(-2))'' ; db2 connect reset >/dev/null \" 2>/dev/null | tail -n1 | sed ''s/\ //g''"])>=3 and last(/Template Base Innovation - DB2/system.run["su - {#INSTNAME} -c \"db2 connect to {#DBNAME} >/dev/null; db2 -x ''select days(current date) - days(LAST_BACKUP) from TABLE(MON_GET_DATABASE(-2))'' ; db2 connect reset >/dev/null \" 2>/dev/null | tail -n1 | sed ''s/\ //g''"])<5'
+                  name: '{$CUSTOMER.CODE}_lastbkp_gudc_db2_v2 - {HOST.NAME} - IBM DB2 {#INSTNAME} {#DBNAME} Last database backup is too old'
+                  opdata: 'Days since last backup: {ITEM.LASTVALUE1}'
+                  priority: HIGH
+                  tags:
+                    -
+                      tag: Expire
+                      value: 'True'
+                    -
+                      tag: InstanceID
+                      value: '{#INSTNAME}'
+                    -
+                      tag: SubComponent
+                      value: Backup
+                -
+                  uuid: dbb241f423184df5aa353bb6b73805a6
+                  expression: 'last(/Template Base Innovation - DB2/system.run["su - {#INSTNAME} -c \"db2 connect to {#DBNAME} >/dev/null; db2 -x ''select days(current date) - days(LAST_BACKUP) from TABLE(MON_GET_DATABASE(-2))'' ; db2 connect reset >/dev/null \" 2>/dev/null | tail -n1 | sed ''s/\ //g''"])>=5'
+                  name: '{$CUSTOMER.CODE}_lastbkp_gudf_db2_v2 - {HOST.NAME} - IBM DB2 {#INSTNAME} {#DBNAME} Last database backup is too old'
+                  opdata: 'Days since last backup: {ITEM.LASTVALUE1}'
+                  priority: DISASTER
+                  dependencies:
+                    -
+                      name: '{$CUSTOMER.CODE}_lastbkp_gudc_db2_v2 - {HOST.NAME} - IBM DB2 {#INSTNAME} {#DBNAME} Last database backup is too old'
+                      expression: 'last(/Template Base Innovation - DB2/system.run["su - {#INSTNAME} -c \"db2 connect to {#DBNAME} >/dev/null; db2 -x ''select days(current date) - days(LAST_BACKUP) from TABLE(MON_GET_DATABASE(-2))'' ; db2 connect reset >/dev/null \" 2>/dev/null | tail -n1 | sed ''s/\ //g''"])>=3 and last(/Template Base Innovation - DB2/system.run["su - {#INSTNAME} -c \"db2 connect to {#DBNAME} >/dev/null; db2 -x ''select days(current date) - days(LAST_BACKUP) from TABLE(MON_GET_DATABASE(-2))'' ; db2 connect reset >/dev/null \" 2>/dev/null | tail -n1 | sed ''s/\ //g''"])<5'
+                  tags:
+                    -
+                      tag: Expire
+                      value: 'True'
+                    -
+                      tag: InstanceID
+                      value: '{#INSTNAME}'
+                    -
+                      tag: SubComponent
+                      value: Backup
+            -
+              uuid: 149eb879fe1c4412a252b84a2226f16d
+              name: 'IBM DB2 {#INSTNAME} {#DBNAME} Lock Deadlocks detected'
+              key: 'system.run["su - {#INSTNAME} -c \"db2 connect to {#DBNAME} >/dev/null; db2 -x ''Select DEADLOCKS from sysibmadm.snapdb'' ; db2 connect reset >/dev/null\" 2>/dev/null | tail -n1 | tail -n1 | sed ''s/\ //g''"]'
+              delay: 5m
+              value_type: FLOAT
+              tags:
+                -
+                  tag: SubComponent
+                  value: Performance
+            -
+              uuid: 8ec002b29f394d65b389cafcf3871d7a
+              name: 'IBM DB2 {#INSTNAME} {#DBNAME} Backup Last Date'
+              key: 'system.run["su - {#INSTNAME} -c \"db2 connect to {#DBNAME} >/dev/null; db2 -x ''select LAST_BACKUP from TABLE(MON_GET_DATABASE(-2))''; db2 connect reset >/dev/null\" 2>/dev/null | tail -n1 | sed ''s/\ //g''"]'
+              delay: 5m
+              trends: '0'
+              value_type: TEXT
+              tags:
+                -
+                  tag: SubComponent
+                  value: Backup
+              trigger_prototypes:
+                -
+                  uuid: dc0962c81eec4c4a836a569890f7e5bf
+                  expression: 'last(/Template Base Innovation - DB2/system.run["su - {#INSTNAME} -c \"db2 connect to {#DBNAME} >/dev/null; db2 -x ''select LAST_BACKUP from TABLE(MON_GET_DATABASE(-2))''; db2 connect reset >/dev/null\" 2>/dev/null | tail -n1 | sed ''s/\ //g''"])>"now()-3d"'
+                  name: '{$CUSTOMER.CODE}_lastbkp_gudc_db2_v1 - {HOST.NAME} - IBM DB2 {#INSTNAME} {#DBNAME} Last Backup Date'
+                  priority: HIGH
+                  tags:
+                    -
+                      tag: Expire
+                      value: 'True'
+                    -
+                      tag: InstanceID
+                      value: '{#INSTNAME}'
+                    -
+                      tag: SubComponent
+                      value: Backup
+            -
+              uuid: eacf316021ec4c798c4c7df130f627ee
+              name: 'IBM DB2 {#INSTNAME} {#DBNAME} Lock Timeout Number'
+              key: 'system.run["su - {#INSTNAME} -c \"db2 connect to {#DBNAME} >/dev/null; db2 -x ''Select LOCK_TIMEOUTS from sysibmadm.snapdb'' ; db2 connect reset >/dev/null\" 2>/dev/null | tail -n1 | tail -n1 | sed ''s/\ //g''"]'
+              delay: 5m
+              value_type: FLOAT
+              tags:
+                -
+                  tag: SubComponent
+                  value: Performance
+            -
+              uuid: 740fc6c7896b49afa3eddea38d08d219
+              name: 'IBM DB2 {#INSTNAME} {#DBNAME} Memory Max (MB)'
+              key: 'system.run["su - {#INSTNAME} -c \"db2 connect to {#DBNAME} >/dev/null; db2 -x ''select MAX_MEMBER_MEM/1024/1024 FROM TABLE(SYSPROC.ADMIN_GET_MEM_USAGE()) ''; db2 connect reset >/dev/null\" 2>/dev/null | tail -n1 | sed ''s/\ //g''"]'
+              delay: 5m
+              value_type: FLOAT
+              tags:
+                -
+                  tag: SubComponent
+                  value: Memory
+            -
+              uuid: 4cfea0122fca4e6c91bb787f2f59d038
+              name: 'IBM DB2 {#INSTNAME} {#DBNAME} Memory Peak (MB)'
+              key: 'system.run[ "su - {#INSTNAME} -c \"db2 connect to {#DBNAME} >/dev/null; db2 -x ''select PEAK_MEMBER_MEM/1024/1024 FROM TABLE(SYSPROC.ADMIN_GET_MEM_USAGE()) '' ; db2 connect reset >/dev/null \" 2>/dev/null | tail -n1 | sed ''s/\ //g''"]'
+              delay: 5m
+              value_type: FLOAT
+              tags:
+                -
+                  tag: SubComponent
+                  value: Memory
+            -
+              uuid: 1305148da9324913b42aee670f6b21cc
+              name: 'IBM DB2 {#INSTNAME} {#DBNAME} Transaction Log Secondary Allocated Currently'
+              key: 'system.run["su - {#INSTNAME} -c \"db2 connect to {#DBNAME} >/dev/null; db2 -x ''Select SEC_LOGS_ALLOCATED from table(mon_get_transaction_log(-1))'' ; db2 connect reset >/dev/null\" 2>/dev/null | tail -n1 | sed ''s/\ //g''"]'
+              delay: 5m
+              value_type: FLOAT
+              tags:
+                -
+                  tag: SubComponent
+                  value: Log
+            -
+              uuid: 8cfd525c43e5487a9126f0ecc5b6d749
+              name: 'IBM DB2 {#INSTNAME} {#DBNAME} Memory Total Pool Size (MB)'
+              key: 'system.run["su - {#INSTNAME} -c \"db2 connect to {#DBNAME} >/dev/null; db2 -x ''Select sum(POOL_CUR_SIZE) /1024 /1024 from sysibmadm.SNAPDBM_MEMORY_POOL'' ; db2 connect reset >/dev/null \" 2>/dev/null | tail -n1 | sed ''s/\ //g''"]'
+              delay: 5m
+              value_type: FLOAT
+              tags:
+                -
+                  tag: SubComponent
+                  value: Memory
+            -
+              uuid: 4f94aafca74c483daf1e4d2089e3ca44
+              name: 'IBM DB2 {#INSTNAME} {#DBNAME} Transaction Log Total Available (MB)'
+              key: 'system.run["su - {#INSTNAME} -c \"db2 connect to {#DBNAME} >/dev/null; db2 -x ''Select TOTAL_LOG_AVAILABLE / 1024 / 1024 AS TOTAL_LOG_AVAILABLE from table(mon_get_transaction_log(-1))'' ; db2 connect reset >/dev/null\" 2>/dev/null | tail -n1 | sed ''s/\ //g''"]'
+              delay: 5m
+              value_type: FLOAT
+              tags:
+                -
+                  tag: SubComponent
+                  value: Log
+            -
+              uuid: 19e5f9c37c8d43c0b167c6ae0dc76a53
+              name: 'IBM DB2 {#INSTNAME} {#DBNAME} Transaction Log Total Used (MB)'
+              key: 'system.run["su - {#INSTNAME} -c \"db2 connect to {#DBNAME} >/dev/null; db2 -x ''select total_log_used /1024 /1024 total_log_mb from table(mon_get_transaction_log(-2))'' ; db2 connect reset >/dev/null \" 2>/dev/null | tail -n1 | sed ''s/\ //g'' | awk -F''='' {''print $2''}"]'
+              delay: 5m
+              value_type: FLOAT
+              tags:
+                -
+                  tag: SubComponent
+                  value: Log
+            -
+              uuid: 69339334895f486f9eba8cc5aaf67c75
+              name: 'IBM DB2 {#INSTNAME} {#DBNAME} Transaction Log Total Used (%)'
+              key: 'system.run["su - {#INSTNAME} -c \"db2 connect to {#DBNAME} >/dev/null; db2 -x ''Select TRUNC(TOTAL_LOG_USED *1. / (TOTAL_LOG_AVAILABLE+TOTAL_LOG_USED) * 100.,2) from table(mon_get_transaction_log(-1))'' ; db2 connect reset >/dev/null \" 2>/dev/null | tail -n1 | sed ''s/\ //g''"]'
+              delay: 5m
+              value_type: FLOAT
+              units: '%'
+              tags:
+                -
+                  tag: SubComponent
+                  value: Log
+            -
+              uuid: 8ecfc2f25d0e48638f6946cc0790f823
+              name: 'IBM DB2 {#INSTNAME} {#DBNAME} Database Code Page'
+              key: 'system.run["su - {#INSTNAME} -c \"db2 get db cfg for {#DBNAME}\" 2>/dev/null | grep ''Database code page'' | awk ''{print $5}''"]'
+              delay: 5m
+              trends: '0'
+              value_type: TEXT
+              tags:
+                -
+                  tag: SubComponent
+                  value: Performance
+            -
+              uuid: cd8e59f545de45a68af91db30a8f0cd7
+              name: 'IBM DB2 {#INSTNAME} {#DBNAME} Transaction Log File Size (Pages 4KB)'
+              key: 'system.run["su - {#INSTNAME} -c \"db2 get db cfg for {#DBNAME}\" 2>/dev/null | grep ''LOGFILSIZ'' | awk ''{print $7}''"]'
+              delay: 5m
+              value_type: FLOAT
+              tags:
+                -
+                  tag: SubComponent
+                  value: Log
+            -
+              uuid: 5de0d5a6131440f8995c1652d78785fa
+              name: 'IBM DB2 {#INSTNAME} {#DBNAME} Transaction Log Amount of Primary'
+              key: 'system.run["su - {#INSTNAME} -c \"db2 get db cfg for {#DBNAME}\" 2>/dev/null | grep ''Number of primary'' | awk ''{print $8}''"]'
+              delay: 5m
+              value_type: FLOAT
+              tags:
+                -
+                  tag: SubComponent
+                  value: Log
+            -
+              uuid: 4051f6bd3a654e24851a38f028db4181
+              name: 'IBM DB2 {#INSTNAME} {#DBNAME} Transaction Log Amount of Secondary'
+              key: 'system.run["su - {#INSTNAME} -c \"db2 get db cfg for {#DBNAME}\" 2>/dev/null | grep ''Number of secondary'' | awk ''{print $8}''"]'
+              delay: 5m
+              value_type: FLOAT
+              tags:
+                -
+                  tag: SubComponent
+                  value: Log
+            -
+              uuid: 9472e0f2c09a4c3595e2ed23058db290
+              name: 'IBM DB2 {#INSTNAME} {#DBNAME} Catalog Cache Size'
+              key: 'system.run["su - {#INSTNAME} -c \"db2 get db cfg for {#DBNAME} | grep ''CATALOGCACHE_SZ''\" 2>/dev/null | tail -n1 | awk ''{print $7}'' | sed ''s/\ //g'' | tail -n1 | sed ''s/\ //g''"]'
+              delay: 5m
+              value_type: FLOAT
+              tags:
+                -
+                  tag: SubComponent
+                  value: FileSystem
+            -
+              uuid: 74627eaa191e4f068a121b0d4cde2df3
+              name: 'IBM DB2 {#INSTNAME} {#DBNAME} Database Code Set'
+              key: 'system.run["su - {#INSTNAME} -c \"db2 get db cfg for {#DBNAME} | grep ''Database code set''\" 2>/dev/null | tail -n1 | awk ''{print $5}''"]'
+              delay: 5m
+              trends: '0'
+              value_type: TEXT
+              tags:
+                -
+                  tag: SubComponent
+                  value: Performance
+            -
+              uuid: a5f008e25bea40cf82db3e37cb8dca26
+              name: 'IBM DB2 {#INSTNAME} {#DBNAME} Database Territory'
+              key: 'system.run["su - {#INSTNAME} -c \"db2 get db cfg for {#DBNAME} | grep ''Database territory''\" 2>/dev/null | tail -n1 | awk ''{print $4}''"]'
+              delay: 5m
+              trends: '0'
+              value_type: TEXT
+              tags:
+                -
+                  tag: SubComponent
+                  value: Performance
+            -
+              uuid: d7a669f68cc94b1a9c075cf2e4285526
+              name: 'IBM DB2 {#INSTNAME} {#DBNAME} Log Buffer Size'
+              key: 'system.run["su - {#INSTNAME} -c \"db2 get db cfg for {#DBNAME} | grep ''LOGBUFSZ''\" 2>/dev/null | tail -n1 | awk ''{print $7}'' | sed ''s/\ //g''"]'
+              delay: 5m
+              value_type: FLOAT
+              tags:
+                -
+                  tag: SubComponent
+                  value: FileSystem
+          master_item:
+            key: 'system.run["echo ''HOST,PATH,INSTNAME,DBNAME''; for instowner in `ps -ef | grep ''Vendor Process'' | grep -v grep | awk ''{print $1}'' | grep -i -v ''new mail''`; do for pathinst in `su - ${instowner} -c ''db2level'' 2>/dev/null | grep ''Product is installed at'' | awk ''{print $5}'' | sed ''s/\"\.//g'' | sed ''s/\"//g'' | grep -i -v ''new mail''`; do for dbname in `su - ${instowner} -c ''db2 list database directory'' 2>/dev/null | grep -E ''Database name|entry type'' | awk -F''='' ''{print $2}'' | sed ''N;s/\n//'' | grep -v Remote | sed ''s/^\ //g'' | awk ''{print $1}'' | sort | uniq `; do echo \"`hostname`,${pathinst},${instowner},${dbname}\"; done; done; done;"]'
+          lld_macro_paths:
+            -
+              lld_macro: '{#DBNAME}'
+              path: $.DBNAME
+            -
+              lld_macro: '{#HOST}'
+              path: $.HOST
+            -
+              lld_macro: '{#INSTNAME}'
+              path: $.INSTNAME
+            -
+              lld_macro: '{#PATH}'
+              path: $.PATH
+        -
+          uuid: 70160a2b99d540469c24c54784a81e85
+          name: 'IBM DB2 DiagPath Discovery Rule'
+          type: DEPENDENT
+          key: db2.diagpath.discovery
+          delay: '0'
+          lifetime: 0d
+          item_prototypes:
+            -
+              uuid: df14591dc14845b5b411c764aaea27f6
+              name: 'IBM DB2 {#INSTNAME} Log Monitoring (ADM1848W)'
+              type: ZABBIX_ACTIVE
+              key: 'log[{#DIAGPATH}db2diag.log,ADM1848W,,20,skip,,60]'
+              delay: 1s
+              trends: '0'
+              value_type: LOG
+              preprocessing:
+                -
+                  type: REGEX
+                  parameters:
+                    - 'MESSAGE\s:\s+([A-Z]+\d+[A-Z])'
+                    - \1
+              tags:
+                -
+                  tag: SubComponent
+                  value: Log
+              trigger_prototypes:
+                -
+                  uuid: cc90ef49996b4228b5ca0d5740131f86
+                  expression: 'last(/Template Base Innovation - DB2/log[{#DIAGPATH}db2diag.log,ADM1848W,,20,skip,,60])="ADM1848W"'
+                  recovery_mode: NONE
+                  name: '{$CUSTOMER.CODE}_dialog_xul5_db2_v2 - {HOST.NAME} - IBM DB2 {#INSTNAME} Log Monitoring: Possible server communication failure with TSM'
+                  opdata: 'String found: {ITEM.VALUE}'
+                  priority: DISASTER
+                  tags:
+                    -
+                      tag: EventClear
+                    -
+                      tag: SubComponent
+                      value: Log
+                -
+                  uuid: eb6b878c04884659baa71aaa403e51f1
+                  expression: 'last(/Template Base Innovation - DB2/log[{#DIAGPATH}db2diag.log,ADM1848W,,20,skip,,60])="Critical"'
+                  recovery_mode: NONE
+                  name: '{$CUSTOMER.CODE}_errlog_xul5_db2_v1 - {HOST.NAME} - IBM DB2 {#INSTNAME} Log Monitoring: Critical error log found'
+                  opdata: 'String found: {ITEM.VALUE}'
+                  priority: HIGH
+                  tags:
+                    -
+                      tag: EventClear
+                    -
+                      tag: SubComponent
+                      value: Log
+            -
+              uuid: 1a39af373cca43e2be6ee737872b1bb8
+              name: 'IBM DB2 {#INSTNAME} Log Level Monitoring'
+              type: ZABBIX_ACTIVE
+              key: 'log[{#DIAGPATH}db2diag.log,LEVEL: Critical,,20,skip,,60]'
+              delay: 1s
+              trends: '0'
+              value_type: LOG
+              preprocessing:
+                -
+                  type: REGEX
+                  parameters:
+                    - 'LEVEL:\s+([A-Z]+.*)|MESSAGE\s:\s+([A-Z]+\d+[A-Z]+.*)'
+                    - \1
+              tags:
+                -
+                  tag: SubComponent
+                  value: Log
+          master_item:
+            key: 'system.run["echo ''HOST,INSTNAME,DIAGPATH''; for instname in `ps -ef | grep ''Vendor Process'' | grep -v grep | awk ''{print $1}'' | grep -i -v ''new mail''`; do for diagpath in `su - ${instname} -c ''db2 get dbm cfg'' 2>/dev/null | grep ''Current member resolved DIAGPATH'' | awk ''{print $6}'' `; do echo \"`hostname`,${instname},${diagpath}\"; done; done;"]'
+          lld_macro_paths:
+            -
+              lld_macro: '{#DIAGPATH}'
+              path: $.DIAGPATH
+            -
+              lld_macro: '{#HOST}'
+              path: $.HOST
+            -
+              lld_macro: '{#INSTNAME}'
+              path: $.INSTNAME
+        -
+          uuid: 87d5d51fa30a4b47ac54fd8a39f8449a
+          name: 'IBM DB2 Instance Discovery Rule'
+          type: DEPENDENT
+          key: db2.instance.discovery
+          delay: '0'
+          lifetime: 0d
+          item_prototypes:
+            -
+              uuid: 8749751eff8f407eb50efaf8094d550b
+              name: 'IBM DB2 {#INSTNAME} Diagnostic Path'
+              key: 'system.run["su - {#INSTNAME} -c \"db2 get dbm cfg \" 2>/dev/null | grep ''DIAGPATH'' | head -1 | awk ''{print $7}'' "]'
+              delay: 5m
+              trends: '0'
+              value_type: TEXT
+              tags:
+                -
+                  tag: component
+                  value: Ddb2
+            -
+              uuid: c96686d1589f439abddd72b4ec42c831
+              name: 'IBM DB2 {#INSTNAME} TCP Port'
+              key: 'system.run["su - {#INSTNAME} -c \"db2 get dbm cfg | grep SVCE\" 2>/dev/null | grep -w SVCENAME | awk {''print $6''} | while read SVCENAME; do grep -w $SVCENAME /etc/services | awk {''print $2''} | awk -F''/'' {''print $1''}; done"]'
+              delay: 5m
+              trends: '0'
+              value_type: TEXT
+              tags:
+                -
+                  tag: component
+                  value: Ddb2
+            -
+              uuid: 8d7aecde8fa74a04a2e95ba46adbc324
+              name: 'IBM DB2 {#INSTNAME} Database Manager Status'
+              key: 'system.run["su - {#INSTNAME} -c \"db2 get snapshot for dbm\" 2>/dev/null | grep ''Database manager status'' | awk ''{print $5}''"]'
+              delay: 5m
+              trends: '0'
+              value_type: TEXT
+              tags:
+                -
+                  tag: component
+                  value: Ddb2
+              trigger_prototypes:
+                -
+                  uuid: bbf0a40bfca14b5f86f3eaf1d448113f
+                  expression: 'last(/Template Base Innovation - DB2/system.run["su - {#INSTNAME} -c \"db2 get snapshot for dbm\" 2>/dev/null | grep ''Database manager status'' | awk ''{print $5}''"])<>"Active"'
+                  name: '{$CUSTOMER.CODE}_instat_gudc_db2_v1 - {HOST.NAME} - IBM DB2 {#INSTNAME} Database Manager Status is not Active'
+                  opdata: 'Status: {ITEM.LASTVALUE1}'
+                  priority: HIGH
+                  description: 'The Database Manager of instance {#INSTNAME} is not Active'
+                  tags:
+                    -
+                      tag: Expire
+                      value: 'True'
+                    -
+                      tag: SubComponent
+                      value: Status
+            -
+              uuid: 440c73b9b48e46979d885c0214a6dc2f
+              name: 'IBM DB2 {#INSTNAME} Service Level'
+              key: 'system.run["su - {#INSTNAME} -c \"db2 get snapshot for dbm\" 2>/dev/null | grep ''Service level'' | awk ''{print $4 \"-\" $5}''"]'
+              delay: 5m
+              trends: '0'
+              value_type: TEXT
+              tags:
+                -
+                  tag: component
+                  value: Ddb2
+            -
+              uuid: 450bae09cbf14b0aae4a8cfb3ca30efe
+              name: 'IBM DB2 {#INSTNAME} Level Version'
+              key: 'system.run["su - {#INSTNAME} -c \"db2level\" 2>/dev/null | grep ''Informational tokens'' | awk -F''v'' ''{print $2}'' | awk -F''\"'' ''{print $1}''"]'
+              delay: 5m
+              trends: '0'
+              value_type: TEXT
+              tags:
+                -
+                  tag: component
+                  value: Ddb2
+            -
+              uuid: e936d39b628347cbb14e1a9c028ad4c7
+              name: 'IBM DB2 {#INSTNAME} Installation Path'
+              key: 'system.run["su - {#INSTNAME} -c \"db2level\" 2>/dev/null | grep ''Product is installed at'' | awk ''{print $5}'' | awk -F ''\"'' ''{print $2}''"]'
+              delay: 5m
+              trends: '0'
+              value_type: TEXT
+              tags:
+                -
+                  tag: component
+                  value: Ddb2
+          master_item:
+            key: 'system.run[" echo ''HOST,PATH,INSTNAME'' ; for instowner in `ps -ef | grep ''Vendor Process'' | grep -v grep | awk ''{print $1}'' | grep -i -v ''new mail''`; do for pathinst in `su - ${instowner} -c ''db2level'' 2>/dev/null | grep ''Product is installed at'' | awk ''{print $5}'' | sed ''s/\"\.//g'' | sed ''s/\"//g'' | grep -i -v ''new mail''`; do echo \"`hostname`,${pathinst},${instowner}\"; done; done ;"]'
+          lld_macro_paths:
+            -
+              lld_macro: '{#HOST}'
+              path: $.HOST
+            -
+              lld_macro: '{#INSTNAME}'
+              path: $.INSTNAME
+            -
+              lld_macro: '{#PATH}'
+              path: $.PATH
+        -
+          uuid: fdf6ff5a75524691bd2e6d2e6ceaf6a6
+          name: 'IBM DB2 Tablespace Discovery Rule'
+          type: DEPENDENT
+          key: db2.tablespace.discovery
+          delay: '0'
+          lifetime: 0d
+          item_prototypes:
+            -
+              uuid: 67ab9149484f4902a1ef7ae9ec73f9f2
+              name: 'IBM DB2 {#INSTNAME} {#DBNAME} Tablespace {#TBSNAME} Content Type'
+              key: 'system.run[su - {#INSTNAME} -c "db2 connect to {#DBNAME} >/dev/null ; db2 -x \"SELECT SYSIBMADM.TBSP_UTILIZATION.TBSP_CONTENT_TYPE FROM SYSIBMADM.TBSP_UTILIZATION WHERE SYSIBMADM.TBSP_UTILIZATION.TBSP_NAME = ''{#TBSNAME}'' \" ; db2 connect reset >/dev/null " 2>/dev/null | tail -n1]'
+              delay: 5m
+              trends: '0'
+              value_type: TEXT
+              tags:
+                -
+                  tag: component
+                  value: Ddb2
+            -
+              uuid: 5bbc6e3c2cac45f79eee70779c966438
+              name: 'IBM DB2 {#INSTNAME} {#DBNAME} Tablespace {#TBSNAME} Page Size (KB)'
+              key: 'system.run[su - {#INSTNAME} -c "db2 connect to {#DBNAME} >/dev/null ; db2 -x \"Select SYSIBMADM.TBSP_UTILIZATION.TBSP_PAGE_SIZE * 1 FROM SYSIBMADM.TBSP_UTILIZATION WHERE SYSIBMADM.TBSP_UTILIZATION.TBSP_NAME = ''{#TBSNAME}'' \" ; db2 connect reset >/dev/null " 2>/dev/null | awk ''{print $1}'' | tail -n1]'
+              delay: 5m
+              value_type: FLOAT
+              tags:
+                -
+                  tag: component
+                  value: Ddb2
+            -
+              uuid: 3f0eb4c0416b4d70a69d72f2f2701d33
+              name: 'IBM DB2 {#INSTNAME} {#DBNAME} Tablespace {#TBSNAME} State'
+              key: 'system.run[su - {#INSTNAME} -c "db2 connect to {#DBNAME} >/dev/null; db2 -x \"Select TBSP_STATE FROM SYSIBMADM.TBSP_UTILIZATION WHERE TBSP_NAME = ''{#TBSNAME}'' \" ; db2 connect reset >/dev/null " 2>/dev/null | awk ''{print $1}'' | tail -n1]'
+              delay: 5m
+              trends: '0'
+              value_type: TEXT
+              tags:
+                -
+                  tag: component
+                  value: Ddb2
+              trigger_prototypes:
+                -
+                  uuid: 0fe49f2d312a4b41b7f316944f4d84c0
+                  expression: |
+                    last(/Template Base Innovation - DB2/system.run[su - {#INSTNAME} -c "db2 connect to {#DBNAME} >/dev/null; db2 -x \"Select TBSP_STATE FROM SYSIBMADM.TBSP_UTILIZATION WHERE TBSP_NAME = '{#TBSNAME}' \" ; db2 connect reset >/dev/null " 2>/dev/null | awk '{print $1}' | tail -n1])="RF_PENDING" or
+                    last(/Template Base Innovation - DB2/system.run[su - {#INSTNAME} -c "db2 connect to {#DBNAME} >/dev/null; db2 -x \"Select TBSP_STATE FROM SYSIBMADM.TBSP_UTILIZATION WHERE TBSP_NAME = '{#TBSNAME}' \" ; db2 connect reset >/dev/null " 2>/dev/null | awk '{print $1}' | tail -n1])="OFFLINE" or
+                    last(/Template Base Innovation - DB2/system.run[su - {#INSTNAME} -c "db2 connect to {#DBNAME} >/dev/null; db2 -x \"Select TBSP_STATE FROM SYSIBMADM.TBSP_UTILIZATION WHERE TBSP_NAME = '{#TBSNAME}' \" ; db2 connect reset >/dev/null " 2>/dev/null | awk '{print $1}' | tail -n1])="RESTORE_PENDING" or
+                    last(/Template Base Innovation - DB2/system.run[su - {#INSTNAME} -c "db2 connect to {#DBNAME} >/dev/null; db2 -x \"Select TBSP_STATE FROM SYSIBMADM.TBSP_UTILIZATION WHERE TBSP_NAME = '{#TBSNAME}' \" ; db2 connect reset >/dev/null " 2>/dev/null | awk '{print $1}' | tail -n1])="BACKUP_PENDING" or
+                    last(/Template Base Innovation - DB2/system.run[su - {#INSTNAME} -c "db2 connect to {#DBNAME} >/dev/null; db2 -x \"Select TBSP_STATE FROM SYSIBMADM.TBSP_UTILIZATION WHERE TBSP_NAME = '{#TBSNAME}' \" ; db2 connect reset >/dev/null " 2>/dev/null | awk '{print $1}' | tail -n1])="DROP_PENDING" or
+                    last(/Template Base Innovation - DB2/system.run[su - {#INSTNAME} -c "db2 connect to {#DBNAME} >/dev/null; db2 -x \"Select TBSP_STATE FROM SYSIBMADM.TBSP_UTILIZATION WHERE TBSP_NAME = '{#TBSNAME}' \" ; db2 connect reset >/dev/null " 2>/dev/null | awk '{print $1}' | tail -n1])="STORAGE_UNDEFINED" or
+                    last(/Template Base Innovation - DB2/system.run[su - {#INSTNAME} -c "db2 connect to {#DBNAME} >/dev/null; db2 -x \"Select TBSP_STATE FROM SYSIBMADM.TBSP_UTILIZATION WHERE TBSP_NAME = '{#TBSNAME}' \" ; db2 connect reset >/dev/null " 2>/dev/null | awk '{print $1}' | tail -n1])="DISABLE_PENDING" or
+                    last(/Template Base Innovation - DB2/system.run[su - {#INSTNAME} -c "db2 connect to {#DBNAME} >/dev/null; db2 -x \"Select TBSP_STATE FROM SYSIBMADM.TBSP_UTILIZATION WHERE TBSP_NAME = '{#TBSNAME}' \" ; db2 connect reset >/dev/null " 2>/dev/null | awk '{print $1}' | tail -n1])="TBS_DELETE" or
+                    last(/Template Base Innovation - DB2/system.run[su - {#INSTNAME} -c "db2 connect to {#DBNAME} >/dev/null; db2 -x \"Select TBSP_STATE FROM SYSIBMADM.TBSP_UTILIZATION WHERE TBSP_NAME = '{#TBSNAME}' \" ; db2 connect reset >/dev/null " 2>/dev/null | awk '{print $1}' | tail -n1])="STORDEF_CHANGED" or
+                    last(/Template Base Innovation - DB2/system.run[su - {#INSTNAME} -c "db2 connect to {#DBNAME} >/dev/null; db2 -x \"Select TBSP_STATE FROM SYSIBMADM.TBSP_UTILIZATION WHERE TBSP_NAME = '{#TBSNAME}' \" ; db2 connect reset >/dev/null " 2>/dev/null | awk '{print $1}' | tail -n1])="STORDEF" or
+                    last(/Template Base Innovation - DB2/system.run[su - {#INSTNAME} -c "db2 connect to {#DBNAME} >/dev/null; db2 -x \"Select TBSP_STATE FROM SYSIBMADM.TBSP_UTILIZATION WHERE TBSP_NAME = '{#TBSNAME}' \" ; db2 connect reset >/dev/null " 2>/dev/null | awk '{print $1}' | tail -n1])="STORDEF_FINAL"
+                  name: '{$CUSTOMER.CODE}_tbsp_gudf_db2_v1 - {HOST.NAME} - IBM DB2 {#INSTNAME} {#DBNAME} Tablespace {#TBSNAME} State is not NORMAL'
+                  opdata: 'The state of tbs is {ITEM.LASTVALUE}'
+                  priority: DISASTER
+                  tags:
+                    -
+                      tag: Expire
+                      value: 'True'
+                    -
+                      tag: SubComponent
+                      value: Tablespace
+            -
+              uuid: d36c5d71c7d9457b905bf1ff3276d305
+              name: 'IBM DB2 {#INSTNAME} {#DBNAME} Tablespace {#TBSNAME} Type'
+              key: 'system.run[su - {#INSTNAME} -c "db2 connect to {#DBNAME} >/dev/null; db2 -x \"Select TBSP_TYPE FROM SYSIBMADM.TBSP_UTILIZATION WHERE TBSP_NAME = ''{#TBSNAME}'' \" ; db2 connect reset >/dev/null " 2>/dev/null | awk ''{print $1}'' | tail -n1]'
+              delay: 5m
+              trends: '0'
+              value_type: TEXT
+              tags:
+                -
+                  tag: component
+                  value: Ddb2
+            -
+              uuid: 76d0fe69daf84c2f9d22b4ebc58cd0a5
+              name: 'IBM DB2 {#INSTNAME} {#DBNAME} Tablespace {#TBSNAME} Usable (MB)'
+              key: 'system.run[su - {#INSTNAME} -c "db2 connect to {#DBNAME} >/dev/null; db2 -x \"Select TBSP_USABLE_PAGES*TBSP_PAGE_SIZE/1024 FROM SYSIBMADM.TBSP_UTILIZATION WHERE TBSP_NAME = ''{#TBSNAME}'' \" ; db2 connect reset >/dev/null " 2>/dev/null | awk ''{print $1}'' | tail -n1]'
+              delay: 5m
+              value_type: FLOAT
+              tags:
+                -
+                  tag: component
+                  value: Ddb2
+            -
+              uuid: c429850478ad4c55aeba5d65c19bb80d
+              name: 'IBM DB2 {#INSTNAME} {#DBNAME} Tablespace {#TBSNAME} Usable Pages'
+              key: 'system.run[su - {#INSTNAME} -c "db2 connect to {#DBNAME} >/dev/null; db2 -x \"Select TBSP_USABLE_PAGES FROM SYSIBMADM.TBSP_UTILIZATION WHERE TBSP_NAME = ''{#TBSNAME}'' \" ; db2 connect reset >/dev/null " 2>/dev/null | awk ''{print $1}'' | tail -n1]'
+              delay: 5m
+              value_type: FLOAT
+              tags:
+                -
+                  tag: component
+                  value: Ddb2
+            -
+              uuid: 4627d8f7cbcc43b89816d905c5afa20a
+              name: 'IBM DB2 {#INSTNAME} {#DBNAME} Tablespace {#TBSNAME} Used (MB)'
+              key: 'system.run[su - {#INSTNAME} -c "db2 connect to {#DBNAME} >/dev/null; db2 -x \"Select TBSP_USED_PAGES*TBSP_PAGE_SIZE/1024 FROM SYSIBMADM.TBSP_UTILIZATION WHERE TBSP_NAME = ''{#TBSNAME}'' \" ; db2 connect reset >/dev/null " 2>/dev/null | awk ''{print $1}'' | tail -n1]'
+              delay: 5m
+              value_type: FLOAT
+              tags:
+                -
+                  tag: component
+                  value: Ddb2
+            -
+              uuid: afa9c301859147c4930d82294dadd409
+              name: 'IBM DB2 {#INSTNAME} {#DBNAME} Tablespace {#TBSNAME} Used Pages'
+              key: 'system.run[su - {#INSTNAME} -c "db2 connect to {#DBNAME} >/dev/null; db2 -x \"Select TBSP_USED_PAGES FROM SYSIBMADM.TBSP_UTILIZATION WHERE TBSP_NAME = ''{#TBSNAME}'' \" ; db2 connect reset >/dev/null " 2>/dev/null | awk ''{print $1}'' | tail -n1]'
+              delay: 5m
+              value_type: FLOAT
+              tags:
+                -
+                  tag: component
+                  value: Ddb2
+            -
+              uuid: 5620cdbd1bed4ad9a3017d4d57eb1706
+              name: 'IBM DB2 {#INSTNAME} {#DBNAME} Tablespace {#TBSNAME} Used (%)'
+              key: 'system.run[su - {#INSTNAME} -c "db2 connect to {#DBNAME} >/dev/null; db2 -x \"Select TBSP_UTILIZATION_PERCENT FROM SYSIBMADM.TBSP_UTILIZATION WHERE TBSP_NAME = ''{#TBSNAME}'' \" ; db2 connect reset >/dev/null " 2>/dev/null | awk ''{print $1}'' | tail -n1]'
+              delay: 5m
+              value_type: FLOAT
+              units: '%'
+              tags:
+                -
+                  tag: component
+                  value: Ddb2
+          master_item:
+            key: 'system.run["echo ''HOST,PATH,INSTNAME,DBNAME,TBSNAME''; for instowner in `ps -ef | grep ''Vendor Process'' | grep -i -v ''new mail'' | grep -v grep | awk ''{print $1}''`; do for pathinst in `su - ${instowner} -c ''db2level'' 2>/dev/null | grep -i -v ''new mail'' | grep ''Product is installed at'' | awk ''{print $5}'' | sed ''s/\"\.//g'' | sed ''s/\"//g''`; do for dbname in `su - ${instowner} -c ''db2 list database directory'' 2>/dev/null | grep -i -v ''new mail'' | grep -E ''Database name|entry type'' | awk -F''='' ''{print $2}'' | sed ''N;s/\n//'' | grep -v Remote | sed ''s/^\ //g'' | awk ''{print $1}'' | sort | uniq `; do for tbsname in `su - ${instowner} -c \"db2 connect to ${dbname} >/dev/null ; db2 -x ''SELECT TBSP_NAME FROM SYSIBMADM.TBSP_UTILIZATION'' ; db2 connect reset >/dev/null\" 2>/dev/null | grep -i -v ''new mail'' `; do echo \"`hostname`,${pathinst},${instowner},${dbname},${tbsname}\"; done; done; done; done"]'
+          lld_macro_paths:
+            -
+              lld_macro: '{#DBNAME}'
+              path: $.DBNAME
+            -
+              lld_macro: '{#HOST}'
+              path: $.HOST
+            -
+              lld_macro: '{#INSTNAME}'
+              path: $.INSTNAME
+            -
+              lld_macro: '{#PATH}'
+              path: $.PATH
+            -
+              lld_macro: '{#TBSNAME}'
+              path: $.TBSNAME
+      tags:
+        -
+          tag: ApplId
+          value: DB2
+        -
+          tag: class
+          value: database
+        -
+          tag: Component
+          value: DB2
+        -
+          tag: ComponentType
+          value: Database
+        -
+          tag: MonitorStage
+          value: QA
+        -
+          tag: target
+          value: DB2
+      macros:
+        -
+          macro: '{$CUSTOMER.CODE}'
+          value: 'Código GSMA'
+      valuemaps:
+        -
+          uuid: 737429d5a3db4313b9b0db534a17e1ae
+          name: 'IBM DB2 Process Running'
+          mappings:
+            -
+              value: '0'
+              newvalue: 'No'
+            -
+              value: '1'
+              newvalue: 'Yes'
