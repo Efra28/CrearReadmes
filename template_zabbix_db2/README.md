@@ -65,6 +65,17 @@ Luego reiniciar el agente Zabbix
 
 ## Importar template Zabbix
 
+Descargar el archivo "zbx_export_templates_DB2.yaml" al equipo local
+
+Ingresar a la consola Zabbix:
+
+Configuration / Templates
+
+![](https://github.com/Efra28/CrearReadmes/blob/main/template_zabbix_db2/Screens/zabbix_1.jpg)
+
+"Import"
+
+![](https://github.com/Efra28/CrearReadmes/blob/main/template_zabbix_db2/Screens/zabbix_2.jpg)
 
 ## Habilitar el envío de alertas para el autoticketing
 
